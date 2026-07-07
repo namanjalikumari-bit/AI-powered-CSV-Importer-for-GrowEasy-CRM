@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ParsedCsvRow } from "@/hooks/use-csv-parser";
 
 const ROW_HEIGHT = 40;
 
-export function CsvPreviewTable({
+export const CsvPreviewTable = memo(function CsvPreviewTable({
   headers,
   rows,
 }: {
@@ -79,4 +79,4 @@ export function CsvPreviewTable({
       </div>
     </div>
   );
-}
+});

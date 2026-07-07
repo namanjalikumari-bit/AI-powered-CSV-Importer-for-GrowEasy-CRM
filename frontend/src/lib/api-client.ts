@@ -119,3 +119,23 @@ export async function fetchImportMeta(): Promise<ImportMeta> {
     throw toApiError(err);
   }
 }
+
+/**
+ * Lightweight, independent client used only to detect a cold-starting Render
+ * backend so the UI can show honest "waking up" messaging instead of a bare
+ * skeleton. Kept separate from `httpClient` so its shorter timeout never
+ * affects real data requests (which may legitimately take longer to warm up).
+ */
+const healthClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15_000,
+});
+
+export async function pingHealth(): Promise<boolean> {
+  try {
+    await healthClient.get("/health");
+    return true;
+  } catch {
+    return false;
+  }
+}

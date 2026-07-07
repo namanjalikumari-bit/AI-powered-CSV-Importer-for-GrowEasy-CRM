@@ -6,12 +6,12 @@ import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CsvDropzone } from "./csv-dropzone";
-import { CsvPreviewTable } from "./csv-preview-table";
+import { LazyCsvPreviewTable } from "./csv-preview-table.lazy";
 import { ImportOptionsForm, ImportOptionsValues } from "./import-options-form";
 import { ImportProgress, ImportPhase } from "./import-progress";
 import { ImportStepper, ImportStep } from "./import-stepper";
 import { ImportSummaryCards } from "./import-summary-cards";
-import { ImportResultsTabs } from "@/components/crm/import-results-tabs";
+import { LazyImportResultsTabs } from "@/components/crm/import-results-tabs.lazy";
 import { ErrorState } from "@/components/shared/error-state";
 import { useCsvParser } from "@/hooks/use-csv-parser";
 import { useImportMeta } from "@/hooks/use-import-meta";
@@ -144,7 +144,7 @@ export function ImportWizard() {
             </div>
           </div>
 
-          <CsvPreviewTable headers={parser.result.headers} rows={parser.result.rows} />
+          <LazyCsvPreviewTable headers={parser.result.headers} rows={parser.result.rows} />
 
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="mb-4 text-sm font-semibold text-foreground">Import options (optional)</h3>
@@ -187,7 +187,7 @@ export function ImportWizard() {
           />
 
           {detailError && <ErrorState description={detailError} />}
-          {detail && <ImportResultsTabs leads={detail.leads} skipped={detail.skipped} />}
+          {detail && <LazyImportResultsTabs leads={detail.leads} skipped={detail.skipped} />}
           {!detail && !detailError && (
             <div className="rounded-xl border border-border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
               Loading detailed results…

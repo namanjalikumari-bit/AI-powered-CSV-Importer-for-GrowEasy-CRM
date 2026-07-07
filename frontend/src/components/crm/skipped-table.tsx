@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { SkippedRecord } from "@/types/crm";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -8,7 +8,7 @@ import { CheckCircle2 } from "lucide-react";
 
 const ROW_HEIGHT = 52;
 
-export function SkippedTable({ records }: { records: SkippedRecord[] }) {
+export const SkippedTable = memo(function SkippedTable({ records }: { records: SkippedRecord[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
@@ -86,4 +86,4 @@ export function SkippedTable({ records }: { records: SkippedRecord[] }) {
       </div>
     </div>
   );
-}
+});

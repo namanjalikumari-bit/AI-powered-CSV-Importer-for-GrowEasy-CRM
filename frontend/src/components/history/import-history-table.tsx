@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { ChevronRight, History } from "lucide-react";
 import {
@@ -22,7 +23,11 @@ function formatDate(value: string): string {
   });
 }
 
-export function ImportHistoryTable({ imports }: { imports: ImportSummary[] }) {
+export const ImportHistoryTable = memo(function ImportHistoryTable({
+  imports,
+}: {
+  imports: ImportSummary[];
+}) {
   if (imports.length === 0) {
     return (
       <EmptyState
@@ -80,4 +85,4 @@ export function ImportHistoryTable({ imports }: { imports: ImportSummary[] }) {
       </Table>
     </div>
   );
-}
+});

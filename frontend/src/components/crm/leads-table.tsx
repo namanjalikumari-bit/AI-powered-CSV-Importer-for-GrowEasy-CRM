@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Lead } from "@/types/crm";
 import { CrmStatusBadge } from "./status-badge";
@@ -17,7 +17,7 @@ function formatPhone(lead: Lead): string {
     : lead.mobile_without_country_code;
 }
 
-export function LeadsTable({ leads }: { leads: Lead[] }) {
+export const LeadsTable = memo(function LeadsTable({ leads }: { leads: Lead[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
@@ -117,4 +117,4 @@ export function LeadsTable({ leads }: { leads: Lead[] }) {
       </div>
     </div>
   );
-}
+});

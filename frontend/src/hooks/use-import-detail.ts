@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiRequestError, fetchImportDetail } from "@/lib/api-client";
 import { ImportDetail } from "@/types/crm";
 
@@ -8,6 +8,9 @@ export function useImportDetail(importId: string) {
   const [data, setData] = useState<ImportDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refetch = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +34,7 @@ export function useImportDetail(importId: string) {
     return () => {
       cancelled = true;
     };
-  }, [importId]);
+  }, [importId, refreshKey]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 }

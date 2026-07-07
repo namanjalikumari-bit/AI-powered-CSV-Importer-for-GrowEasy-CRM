@@ -1,0 +1,17 @@
+import { TableSkeleton } from "@/components/shared/table-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+
+export default function HistoryLoading() {
+  return (
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-40" />
+          <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-8 w-32" />
+      </div>
+      <TableSkeleton rows={8} columns={7} />
+    </div>
+  );
+}

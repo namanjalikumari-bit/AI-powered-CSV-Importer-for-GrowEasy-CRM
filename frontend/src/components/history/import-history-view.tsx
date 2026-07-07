@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/button";
 import { TableSkeleton } from "@/components/shared/table-skeleton";
 import { ErrorState } from "@/components/shared/error-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
+import { BackendWakeUpBanner } from "@/components/shared/backend-wakeup-banner";
 import { useImportHistory } from "@/hooks/use-import-history";
+import { useBackendStatus } from "@/hooks/use-backend-status";
 import { ImportHistoryTable } from "./import-history-table";
 
 const PAGE_SIZE = 15;
@@ -16,6 +18,7 @@ const PAGE_SIZE = 15;
 export function ImportHistoryView() {
   const [page, setPage] = useState(1);
   const { data, isLoading, error, refetch } = useImportHistory(page, PAGE_SIZE);
+  const backend = useBackendStatus();
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
@@ -31,6 +34,8 @@ export function ImportHistoryView() {
           </Button>
         }
       />
+
+      <BackendWakeUpBanner status={backend.status} onRetry={backend.retry} />
 
       {isLoading && <TableSkeleton rows={8} columns={7} />}
       {!isLoading && error && <ErrorState description={error} onRetry={refetch} />}

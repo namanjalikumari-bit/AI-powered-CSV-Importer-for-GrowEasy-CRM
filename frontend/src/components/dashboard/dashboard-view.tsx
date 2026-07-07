@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { CheckCircle2, Database, UploadCloud, XCircle } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
@@ -7,13 +8,65 @@ import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatCardSkeleton, TableSkeleton } from "@/components/shared/table-skeleton";
 import { ErrorState } from "@/components/shared/error-state";
+import { BackendWakeUpBanner } from "@/components/shared/backend-wakeup-banner";
 import { ImportHistoryTable } from "@/components/history/import-history-table";
 import { useOverallStats } from "@/hooks/use-overall-stats";
 import { useImportHistory } from "@/hooks/use-import-history";
+import { useBackendStatus } from "@/hooks/use-backend-status";
+import { OverallStats } from "@/lib/api-client";
+
+const StatsSection = memo(function StatsSection({
+  isLoading,
+  error,
+  data,
+  onRetry,
+}: {
+  isLoading: boolean;
+  error: string | null;
+  data: OverallStats | null;
+  onRetry: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <>
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="sm:col-span-3">
+        <ErrorState description={error} onRetry={onRetry} />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <StatCard label="Total Imports" value={data?.totalImports ?? 0} icon={Database} tone="default" />
+      <StatCard
+        label="Leads Imported"
+        value={(data?.totalLeads ?? 0).toLocaleString()}
+        icon={CheckCircle2}
+        tone="success"
+      />
+      <StatCard
+        label="Records Skipped"
+        value={(data?.totalSkipped ?? 0).toLocaleString()}
+        icon={XCircle}
+        tone="warning"
+      />
+    </>
+  );
+});
 
 export function DashboardView() {
   const stats = useOverallStats();
   const history = useImportHistory(1, 5);
+  const backend = useBackendStatus();
 
   return (
     <div>
@@ -28,34 +81,15 @@ export function DashboardView() {
         }
       />
 
+      <BackendWakeUpBanner status={backend.status} onRetry={backend.retry} />
+
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {stats.isLoading ? (
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
-        ) : stats.error ? (
-          <div className="sm:col-span-3">
-            <ErrorState description={stats.error} />
-          </div>
-        ) : (
-          <>
-            <StatCard label="Total Imports" value={stats.data?.totalImports ?? 0} icon={Database} tone="default" />
-            <StatCard
-              label="Leads Imported"
-              value={(stats.data?.totalLeads ?? 0).toLocaleString()}
-              icon={CheckCircle2}
-              tone="success"
-            />
-            <StatCard
-              label="Records Skipped"
-              value={(stats.data?.totalSkipped ?? 0).toLocaleString()}
-              icon={XCircle}
-              tone="warning"
-            />
-          </>
-        )}
+        <StatsSection
+          isLoading={stats.isLoading}
+          error={stats.error}
+          data={stats.data}
+          onRetry={stats.refetch}
+        />
       </div>
 
       <div className="mb-4 flex items-center justify-between">

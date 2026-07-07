@@ -7,12 +7,15 @@ import { PageHeader } from "@/components/shared/page-header";
 import { TableSkeleton, StatCardSkeleton } from "@/components/shared/table-skeleton";
 import { ErrorState } from "@/components/shared/error-state";
 import { ImportSummaryCards } from "@/components/csv-importer/import-summary-cards";
-import { ImportResultsTabs } from "@/components/crm/import-results-tabs";
+import { LazyImportResultsTabs } from "@/components/crm/import-results-tabs.lazy";
+import { BackendWakeUpBanner } from "@/components/shared/backend-wakeup-banner";
 import { ImportStatusBadge } from "./import-status-badge";
 import { useImportDetail } from "@/hooks/use-import-detail";
+import { useBackendStatus } from "@/hooks/use-backend-status";
 
 export function ImportDetailView({ importId }: { importId: string }) {
-  const { data, isLoading, error } = useImportDetail(importId);
+  const { data, isLoading, error, refetch } = useImportDetail(importId);
+  const backend = useBackendStatus();
 
   return (
     <div>
@@ -29,6 +32,8 @@ export function ImportDetailView({ importId }: { importId: string }) {
         }
       />
 
+      <BackendWakeUpBanner status={backend.status} onRetry={backend.retry} />
+
       {isLoading && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -40,7 +45,7 @@ export function ImportDetailView({ importId }: { importId: string }) {
         </div>
       )}
 
-      {!isLoading && error && <ErrorState description={error} />}
+      {!isLoading && error && <ErrorState description={error} onRetry={refetch} />}
 
       {!isLoading && !error && data && (
         <div className="space-y-6">
@@ -57,7 +62,7 @@ export function ImportDetailView({ importId }: { importId: string }) {
             skippedCount={data.import.skippedCount}
           />
 
-          <ImportResultsTabs leads={data.leads} skipped={data.skipped} />
+          <LazyImportResultsTabs leads={data.leads} skipped={data.skipped} />
         </div>
       )}
     </div>

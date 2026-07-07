@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiRequestError, fetchOverallStats, OverallStats } from "@/lib/api-client";
 
 export function useOverallStats() {
   const [data, setData] = useState<OverallStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const refetch = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
+    setIsLoading(true);
+    setError(null);
 
     fetchOverallStats()
       .then((result) => {
@@ -27,7 +32,7 @@ export function useOverallStats() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 }
