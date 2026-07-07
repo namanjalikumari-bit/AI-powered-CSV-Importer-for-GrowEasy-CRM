@@ -1,85 +1,244 @@
 # GrowEasy — AI-Powered CSV Importer for CRM
 
-Intelligently imports leads from any CSV format (Facebook Lead Ads, Google Ads, Excel exports, real-estate CRMs, agency sheets, manual spreadsheets) into GrowEasy CRM. Gemini AI maps arbitrary column names to the fixed CRM schema — no hardcoded header matching.
+Imports leads from **any** CSV format — Facebook Lead Ads, Google Ads, Excel exports, real-estate CRM exports, marketing agency sheets, manually created spreadsheets — into the fixed GrowEasy CRM schema. Column names are never fixed or predictable; an LLM semantically maps whatever it finds to the CRM fields, with a deterministic rules layer enforcing the hard business constraints (allowed enums, first-email/phone-only, skip conditions) so the output is always safe even if a model has an off day.
 
-## Stack
+**Live app:** https://groweasy-csv-importer-seven.vercel.app
+**Repository:** https://github.com/namanjalikumari-bit/AI-powered-CSV-Importer-for-GrowEasy-CRM
 
-- **Frontend**: Next.js 15 (App Router), TypeScript, Tailwind CSS v4, shadcn/ui, TanStack Table/Virtual, React Hook Form + Zod, React Dropzone
-- **Backend**: Node.js, Express, TypeScript, Mongoose, Multer, Papa Parse
-- **Database**: MongoDB (Atlas in production, works with any MongoDB 6+ instance locally)
-- **AI**: Gemini API (`@google/genai`)
+## Table of contents
 
-## Project layout
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [AI architecture — provider abstraction](#ai-architecture--provider-abstraction)
+- [Tech stack](#tech-stack)
+- [Folder structure](#folder-structure)
+- [Features](#features)
+- [Installation (local development)](#installation-local-development)
+- [Environment variables](#environment-variables)
+- [Deployment](#deployment)
+- [CRM fields & AI rules](#crm-fields--ai-rules)
+- [Testing performed](#testing-performed)
+- [Future improvements](#future-improvements)
+
+## Overview
+
+The product has exactly four steps, and only one of them touches the network beyond the initial page load:
+
+1. **Upload** — drag-and-drop or file picker, client-side validated (`.csv`, size cap).
+2. **Preview** — the CSV is parsed entirely in the browser (Papa Parse) and rendered in a virtualized, sticky-header table. **No AI call happens here.**
+3. **Confirm** — only on explicit confirmation is the file uploaded to the backend.
+4. **Result** — the backend batches rows, sends them to an AI provider for field mapping, applies deterministic business rules, persists everything to MongoDB, and returns imported/skipped counts plus the full records for review. Every run is kept in **Import History** indefinitely.
+
+## Architecture
 
 ```
-backend/    Express API — CSV parsing, Gemini field mapping, MongoDB persistence
-frontend/   Next.js dashboard — upload wizard, preview, results, import history
+┌────────────────┐        multipart/form-data        ┌──────────────────────┐
+│  Next.js 15    │ ─────────────────────────────────▶ │  Express API         │
+│  (Vercel)      │                                     │  (Render)            │
+│                │ ◀───────────────────────────────── │                      │
+│  client-side   │        JSON { imported, skipped }   │  Papa Parse (server) │
+│  CSV preview   │                                     │  → batches of rows   │
+└────────────────┘                                     │  → AIService         │
+                                                        │     ├─ DeepSeek (1st)│
+                                                        │     └─ Gemini  (2nd) │
+                                                        │  → business rules    │
+                                                        │  → MongoDB Atlas     │
+                                                        └──────────────────────┘
 ```
 
-## Prerequisites
+- The frontend never talks to the AI providers directly — the backend is the only place that holds API keys.
+- The backend never trusts the AI blindly — `crm_status`/`data_source` enum membership, the "first email/phone only" rule, and the skip condition (no email **and** no phone) are re-validated in code after the AI responds, in [`import.service.ts`](backend/src/services/import.service.ts).
 
-- Node.js 20+
-- A MongoDB connection string (MongoDB Atlas, or any reachable MongoDB 6+ instance)
-- A Gemini API key from https://aistudio.google.com/apikey
+## AI architecture — provider abstraction
 
-## 1. Backend setup
+```
+AIService (backend/src/services/ai/ai.service.ts)
+   │
+   │  chunk rows into batches → run with bounded concurrency
+   │
+   ▼
+for each batch: try providers in order until one succeeds
+   ├─ DeepSeekProvider   (backend/src/services/ai/deepseek.provider.ts)  ← primary
+   └─ GeminiProvider     (backend/src/services/ai/gemini.provider.ts)   ← fallback
+```
+
+- Both providers implement the same `AIProvider` interface (`mapBatch(rows, options): Promise<AiRowResult[]>`) — `import.service.ts` and the rest of the business logic have **zero knowledge** of which provider is active. Swapping, reordering, or adding a third provider (OpenAI, Claude, ...) is a one-line change to the `providers` array in `ai.service.ts`.
+- Each provider retries transient failures internally (2 retries, exponential backoff) before the batch is handed to the next provider in the chain.
+- If **every** provider fails for a batch (bad keys, provider outage, malformed responses after retries), those rows are marked `SKIPPED` with reason `"AI processing failed across all providers"` rather than crashing the import — one bad batch never takes down the rest of a large file.
+- DeepSeek is called via its OpenAI-compatible `chat/completions` endpoint with `response_format: { type: "json_object" }`; Gemini is called via `@google/genai` with a strict `responseSchema` (structured output) — both are steered by the same shared prompt in `ai/prompt.ts`, so behavior stays consistent across providers.
+- Verified locally: with a valid DeepSeek key, batches are mapped by DeepSeek. With an intentionally invalid DeepSeek key, the same batch correctly falls through to Gemini and produces identical results — see [Testing performed](#testing-performed).
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Frontend framework | Next.js 15 (App Router), TypeScript |
+| UI | Tailwind CSS v4, shadcn/ui (Base UI primitives), Lucide icons |
+| Data & forms | TanStack Table + TanStack Virtual, React Hook Form + Zod, React Dropzone |
+| Backend | Node.js, Express, TypeScript |
+| CSV parsing | Papa Parse (client for preview, server for the authoritative parse) |
+| Uploads | Multer (in-memory, size/type validated) |
+| Database | MongoDB Atlas via Mongoose |
+| AI | DeepSeek (primary) + Gemini (fallback), provider-abstracted |
+| Frontend hosting | Vercel |
+| Backend hosting | Render |
+
+## Folder structure
+
+```
+GrowEasy/
+├── render.yaml                     # Render Blueprint (backend web service)
+├── backend/
+│   ├── src/
+│   │   ├── config/                 # env validation (zod), logger, MongoDB connection
+│   │   ├── middleware/             # multer upload, centralized error handler
+│   │   ├── models/                 # Import, Lead, SkippedRecord (Mongoose)
+│   │   ├── services/
+│   │   │   ├── ai/                 # provider abstraction (see above)
+│   │   │   ├── csv.service.ts      # server-side CSV parsing
+│   │   │   └── import.service.ts   # orchestration + business rules
+│   │   ├── controllers/, routes/   # REST API
+│   │   ├── types/crm.ts            # shared CRM schema/enums
+│   │   └── app.ts, server.ts
+│   └── .env.example
+└── frontend/
+    ├── src/
+    │   ├── app/                    # routes: /, /import, /history, /history/[id]
+    │   ├── components/
+    │   │   ├── csv-importer/       # upload wizard: dropzone, preview, options, progress
+    │   │   ├── crm/                # status/source badges, leads & skipped tables
+    │   │   ├── history/            # history list + detail views
+    │   │   ├── dashboard/           # overview stats
+    │   │   ├── layout/              # sidebar, app shell, theming
+    │   │   └── ui/                  # shadcn primitives
+    │   ├── hooks/                   # CSV parsing, data fetching hooks
+    │   ├── lib/api-client.ts        # typed API client
+    │   └── types/crm.ts
+    └── .env.example
+```
+
+## Features
+
+- Drag & drop **and** file-picker upload, with client-side type/size validation.
+- Fully client-side CSV preview (virtualized, sticky header, horizontal + vertical scroll) — genuinely zero backend/AI cost until the user confirms.
+- Batched, concurrent AI field mapping with a DeepSeek → Gemini fallback chain.
+- Deterministic post-processing: enum validation, first-email/phone extraction with overflow into `crm_note`, and the "no email and no phone → skip" rule enforced in code, not just prompted.
+- Import history with per-run detail pages (imported vs. skipped, full record view).
+- Dark mode / light mode (`next-themes`), fully responsive, virtualized results tables for large files.
+- Skeleton loading states, toast notifications, empty states, and dedicated error/not-found pages.
+- Centralized API error handling, request logging (pino), rate limiting, Helmet security headers.
+
+## Installation (local development)
+
+Prerequisites: Node.js 20+, a MongoDB connection string, a DeepSeek API key, a Gemini API key.
 
 ```bash
+# Backend
 cd backend
 npm install
-cp .env.example .env
+cp .env.example .env   # fill in MONGODB_URI, DEEPSEEK_API_KEY, GEMINI_API_KEY
+npm run dev             # http://localhost:5000
+
+# Frontend (separate terminal)
+cd frontend
+npm install
+cp .env.example .env.local   # defaults to http://localhost:5000/api
+npm run dev             # http://localhost:3000
 ```
 
-Edit `backend/.env`:
+Other scripts — backend: `npm run build`, `npm start`, `npm run typecheck`. Frontend: `npm run build`, `npm start`, `npm run lint`.
 
-```
-MONGODB_URI=<your MongoDB Atlas connection string>
-GEMINI_API_KEY=<your Gemini API key>
-```
+> If MongoDB Atlas SRV lookups fail locally with `ECONNREFUSED` on some Windows/corporate networks, `backend/src/config/db.ts` already forces public DNS resolvers (`8.8.8.8`, `1.1.1.1`) as a fallback before connecting — no action needed.
 
-Run it:
+## Environment variables
 
-```bash
-npm run dev       # starts on http://localhost:5000 with hot reload
-```
+**`backend/.env`** (see `backend/.env.example`):
 
-Other scripts: `npm run build` (compile to `dist/`), `npm start` (run compiled build), `npm run typecheck`.
+| Variable | Required | Notes |
+|---|---|---|
+| `MONGODB_URI` | yes | MongoDB Atlas (or any MongoDB 6+) connection string |
+| `DEEPSEEK_API_KEY` | yes* | Primary AI provider |
+| `DEEPSEEK_MODEL` | no | Default `deepseek-chat` |
+| `GEMINI_API_KEY` | yes | Fallback AI provider |
+| `GEMINI_MODEL` | no | Default `gemini-2.5-flash` |
+| `CORS_ORIGIN` | no | Comma-separated allowed frontend origins |
+| `MAX_UPLOAD_SIZE_MB` | no | Default `10` |
+| `AI_BATCH_SIZE` | no | Rows per AI request, default `25` |
+| `AI_CONCURRENCY` | no | Parallel batches in flight, default `3` |
 
-## 2. Frontend setup
+\* If omitted or invalid, every batch automatically falls back to Gemini — the app still works with only `GEMINI_API_KEY` set.
+
+**`frontend/.env.local`** (see `frontend/.env.example`):
+
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Backend API base, e.g. `http://localhost:5000/api` locally or the Render URL in production |
+
+## Deployment
+
+### Frontend — Vercel (live)
+
+Deployed from `frontend/` via the Vercel CLI, linked to project `groweasy-csv-importer` under the `namanjalikumari-6861s-projects` team:
 
 ```bash
 cd frontend
-npm install
-cp .env.example .env.local
+vercel link --project groweasy-csv-importer
+vercel env add NEXT_PUBLIC_API_BASE_URL production   # → backend URL
+vercel --prod
 ```
 
-`frontend/.env.local` already defaults to `NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api`, matching the backend above.
+Live at **https://groweasy-csv-importer-seven.vercel.app**.
 
-Run it:
+### Backend — Render
+
+`render.yaml` at the repo root is a ready-to-use Blueprint: it points `rootDir` at `backend/`, runs `npm install && npm run build` then `npm start`, and declares every required env var (secrets marked `sync: false` so Render prompts for them instead of storing them in the blueprint).
+
+To deploy: **New → Blueprint** in the Render dashboard, connect this GitHub repository, and Render auto-detects `render.yaml`. Fill in the four secret values when prompted (`MONGODB_URI`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `CORS_ORIGIN` — set this to the Vercel URL above) and click apply. Or use this one-click link:
+
+```
+https://render.com/deploy?repo=https://github.com/namanjalikumari-bit/AI-powered-CSV-Importer-for-GrowEasy-CRM
+```
+
+This step requires the repository owner's own Render account authorization (connecting GitHub to Render is an OAuth-style grant only the account owner can complete), so it wasn't done autonomously — everything needed for it to be a single click was prepared and pushed, including the health check path (`/api/health`) Render uses to confirm the service is live.
+
+Once the backend is live, update the Vercel env var to the real Render URL and redeploy:
 
 ```bash
-npm run dev        # starts on http://localhost:3000
+cd frontend
+vercel env rm NEXT_PUBLIC_API_BASE_URL production
+printf "https://<your-render-service>.onrender.com/api" | vercel env add NEXT_PUBLIC_API_BASE_URL production
+vercel --prod
 ```
 
-Other scripts: `npm run build`, `npm start`, `npm run lint`.
+## CRM fields & AI rules
 
-## 3. Using the app
+Target schema (`backend/src/types/crm.ts`, mirrored in `frontend/src/types/crm.ts`):
 
-1. Open http://localhost:3000 — dashboard with overview stats and recent imports.
-2. Go to **Import Leads**, drop in a `.csv` file. It's parsed and previewed entirely in the browser — no backend/AI call yet.
-3. Optionally set a default data source / lead owner fallback, then **Confirm & Import**.
-4. Only now is the file sent to the backend, which batches rows and sends them to Gemini for field mapping, then persists `Import`, `Lead`, and `SkippedRecord` documents in MongoDB.
-5. Review the imported vs. skipped breakdown, or revisit any run later from **Import History**.
+`created_at, name, email, country_code, mobile_without_country_code, company, city, state, country, lead_owner, crm_status, crm_note, data_source, possession_time, description`
 
-## AI mapping rules
+- `crm_status` ∈ `{GOOD_LEAD_FOLLOW_UP, DID_NOT_CONNECT, BAD_LEAD, SALE_DONE}` or `null` — never invented if there's no signal.
+- `data_source` ∈ `{leads_on_demand, meridian_tower, eden_park, varah_swamy, sarjapur_plots}` or `null`.
+- Only the **first** email/phone per row becomes `email`/`mobile_without_country_code`; every additional one is appended into `crm_note`.
+- A row is skipped **only** when it has neither an email nor a phone number, anywhere in the row — this is enforced in code after the AI responds, not just requested in the prompt.
+- `created_at` is normalized by the AI to an ISO 8601 string so `new Date(created_at)` is always valid in JS; unparseable dates become `null` rather than a guess.
+- Multiple/duplicate columns for the same concept (two phone columns, first/last name split, etc.) are treated as one field with rule 2/3 applied, not as separate CRM attributes.
 
-- `crm_status` is restricted to `GOOD_LEAD_FOLLOW_UP`, `DID_NOT_CONNECT`, `BAD_LEAD`, `SALE_DONE` (or `null`).
-- `data_source` is restricted to `leads_on_demand`, `meridian_tower`, `eden_park`, `varah_swamy`, `sarjapur_plots` (or `null`).
-- Only the first email/phone found per row is stored on the lead; any additional ones are appended to `crm_note`.
-- A row is skipped when it has neither an email nor a phone number — never hallucinated.
-- If a Gemini batch call fails after retries, that batch's rows are marked skipped (not silently dropped and not a hard failure) so one bad batch never crashes an import.
+## Testing performed
 
-## Notes
+All of the following were run against the **real** Atlas cluster and **real** DeepSeek/Gemini keys, not mocks:
 
-- CSV files are capped at 10MB / 20,000 rows (configurable via backend env vars `MAX_UPLOAD_SIZE_MB`, and the row cap in `src/services/csv.service.ts` / `src/hooks/use-csv-parser.ts`).
-- `GEMINI_BATCH_SIZE` and `GEMINI_CONCURRENCY` control how rows are chunked and how many batches run in parallel against Gemini.
+- **Happy path**: Facebook/Google-Ads-style messy CSV with mismatched headers (`Lead Name`, `Alt Email`, `Phone Number`, `Disposition`, `Campaign Source`, mixed date formats) → correctly mapped names, first-email/phone-only with overflow into `crm_note`, semantically correct `crm_status`/`data_source` classification, and all four date formats normalized to valid ISO dates.
+- **Skip rule**: rows with no email and no phone were skipped with a clear reason, even when they had rich unrelated data (company, notes, etc.).
+- **Provider fallback**: with an intentionally invalid `DEEPSEEK_API_KEY`, the batch failed over to Gemini automatically and produced the same correct mapping — confirmed via server logs (`deepseek failed for this batch, trying next provider` → `AI batch mapped successfully, provider: gemini`).
+- **Malformed input**: non-CSV file with a `.txt` extension, a CSV with a header row but zero data rows, a completely empty file, a binary file with a spoofed extension, and a request with no file attached — every case returned a clear `400` with a specific message, never a `500` or a hang.
+- **Not found**: a random/garbage import ID returns `404`; an unknown route returns `404`.
+- **Build/type safety**: `tsc --noEmit` and `next build` (including ESLint) both pass clean on the final code for both apps.
+- **UI**: dark mode and light mode, responsive layout down to mobile widths, virtualized tables confirmed to render correctly for the imported/skipped result sets, loading skeletons and empty/error states all exercised.
+
+## Future improvements
+
+- Move AI processing to a background job queue (e.g. BullMQ) so very large imports don't hold an HTTP request open; poll for status from the frontend instead of awaiting the response inline.
+- Streaming/incremental CSV parsing for multi-hundred-thousand-row files instead of parsing the whole file into memory.
+- Per-column confidence scores from the AI so low-confidence mappings can be flagged for manual review before import.
+- Unit/integration test suite (Vitest/Jest) around `import.service.ts`'s business-rule enforcement and the AI provider fallback chain.
+- Dockerfiles for both apps for container-based deployment as an alternative to Vercel/Render.
