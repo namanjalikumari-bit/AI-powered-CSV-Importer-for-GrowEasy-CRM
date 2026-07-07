@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: groweasy-csv-importer-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-chat
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: CORS_ORIGIN
+        sync: false
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: AI_BATCH_SIZE
+        value: "25"
+      - key: AI_CONCURRENCY
+        value: "3"
