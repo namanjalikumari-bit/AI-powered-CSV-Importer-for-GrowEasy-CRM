@@ -25,7 +25,11 @@ export function ImportDetailView({ importId }: { importId: string }) {
           data ? `Started ${new Date(data.import.startedAt).toLocaleString()}` : undefined
         }
         actions={
-          <Button variant="outline" render={<Link href="/history" />}>
+          <Button
+            variant="outline"
+            render={<Link href="/history" />}
+            className="w-full justify-center sm:w-auto"
+          >
             <ArrowLeft className="size-4" />
             Back to history
           </Button>

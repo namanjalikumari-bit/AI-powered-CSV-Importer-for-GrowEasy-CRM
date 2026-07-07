@@ -26,7 +26,10 @@ export const CsvPreviewTable = memo(function CsvPreviewTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
-      <div ref={scrollRef} className="max-h-[28rem] overflow-auto">
+      <div
+        ref={scrollRef}
+        className="max-h-[28rem] overflow-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
+      >
         <table className="w-full min-w-max border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur supports-backdrop-filter:bg-muted/80">
             <tr>

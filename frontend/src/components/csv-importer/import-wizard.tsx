@@ -156,11 +156,11 @@ export function ImportWizard() {
           </div>
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={handleBackToUpload}>
+            <Button variant="outline" onClick={handleBackToUpload} className="w-full justify-center sm:w-auto">
               <ArrowLeft className="size-4" />
               Choose a different file
             </Button>
-            <Button onClick={handleConfirmImport}>
+            <Button onClick={handleConfirmImport} className="w-full justify-center sm:w-auto">
               Confirm &amp; Import with AI
               <ArrowRight className="size-4" />
             </Button>
@@ -195,10 +195,14 @@ export function ImportWizard() {
           )}
 
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-            <Button variant="outline" render={<Link href="/history" />}>
+            <Button
+              variant="outline"
+              render={<Link href="/history" />}
+              className="w-full justify-center sm:w-auto"
+            >
               View full import history
             </Button>
-            <Button onClick={handleReset}>
+            <Button onClick={handleReset} className="w-full justify-center sm:w-auto">
               <RotateCcw className="size-4" />
               Import another file
             </Button>

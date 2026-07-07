@@ -11,7 +11,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-12 text-center sm:px-6 sm:py-16">
       <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-destructive/10">
         <AlertTriangle className="size-6 text-destructive" aria-hidden="true" />
       </div>

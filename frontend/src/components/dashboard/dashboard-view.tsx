@@ -74,7 +74,7 @@ export function DashboardView() {
         title="Dashboard"
         description="Overview of your GrowEasy AI-powered CSV import activity."
         actions={
-          <Button render={<Link href="/import" />}>
+          <Button render={<Link href="/import" />} className="w-full justify-center sm:w-auto">
             <UploadCloud className="size-4" />
             New Import
           </Button>

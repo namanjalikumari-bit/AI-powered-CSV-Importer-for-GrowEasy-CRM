@@ -16,7 +16,7 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 px-6 py-24 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-16 text-center sm:px-6 sm:py-24">
       <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-destructive/10">
         <AlertOctagon className="size-6 text-destructive" />
       </div>

@@ -33,7 +33,7 @@ export function ImportProgress({
   const currentIndex = stages.findIndex((s) => s.key === phase);
 
   return (
-    <div className="flex flex-col items-center rounded-xl border border-border bg-card px-6 py-14 text-center">
+    <div className="flex flex-col items-center rounded-xl border border-border bg-card px-4 py-10 text-center sm:px-6 sm:py-14">
       <div className="mb-6 flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
         <Loader2 className="size-6 animate-spin" />
       </div>
