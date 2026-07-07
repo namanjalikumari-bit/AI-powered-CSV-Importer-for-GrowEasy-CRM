@@ -3,6 +3,7 @@
 Imports leads from **any** CSV format — Facebook Lead Ads, Google Ads, Excel exports, real-estate CRM exports, marketing agency sheets, manually created spreadsheets — into the fixed GrowEasy CRM schema. Column names are never fixed or predictable; an LLM semantically maps whatever it finds to the CRM fields, with a deterministic rules layer enforcing the hard business constraints (allowed enums, first-email/phone-only, skip conditions) so the output is always safe even if a model has an off day.
 
 **Live app:** https://groweasy-csv-importer-seven.vercel.app
+**Live API:** https://groweasy-csv-importer-backend-4hve.onrender.com/api/health
 **Repository:** https://github.com/namanjalikumari-bit/AI-powered-CSV-Importer-for-GrowEasy-CRM
 
 ## Table of contents
@@ -189,19 +190,19 @@ vercel --prod
 
 Live at **https://groweasy-csv-importer-seven.vercel.app**.
 
-### Backend — Render
+### Backend — Render (live)
 
-`render.yaml` at the repo root is a ready-to-use Blueprint: it points `rootDir` at `backend/`, runs `npm install && npm run build` then `npm start`, and declares every required env var (secrets marked `sync: false` so Render prompts for them instead of storing them in the blueprint).
+Deployed as service `groweasy-csv-importer-backend` at **https://groweasy-csv-importer-backend-4hve.onrender.com** on Render's free tier, region Oregon, auto-deploying from `main`. `render.yaml` at the repo root documents the same configuration as a Blueprint for reproducibility:
 
-To deploy: **New → Blueprint** in the Render dashboard, connect this GitHub repository, and Render auto-detects `render.yaml`. Fill in the four secret values when prompted (`MONGODB_URI`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `CORS_ORIGIN` — set this to the Vercel URL above) and click apply. Or use this one-click link:
-
+```yaml
+buildCommand: npm install --include=dev && npm run build   # --include=dev matters: NODE_ENV=production
+startCommand: npm start                                     # otherwise prunes typescript/@types/* before tsc runs
+healthCheckPath: /api/health
 ```
-https://render.com/deploy?repo=https://github.com/namanjalikumari-bit/AI-powered-CSV-Importer-for-GrowEasy-CRM
-```
 
-This step requires the repository owner's own Render account authorization (connecting GitHub to Render is an OAuth-style grant only the account owner can complete), so it wasn't done autonomously — everything needed for it to be a single click was prepared and pushed, including the health check path (`/api/health`) Render uses to confirm the service is live.
+To redeploy from scratch elsewhere: **New → Blueprint** in the Render dashboard, connect this repository (Render auto-detects `render.yaml`), and fill in the secret values (`MONGODB_URI`, `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `CORS_ORIGIN`) when prompted.
 
-Once the backend is live, update the Vercel env var to the real Render URL and redeploy:
+If you redeploy to a different URL, update the Vercel env var and redeploy the frontend:
 
 ```bash
 cd frontend
@@ -234,6 +235,8 @@ All of the following were run against the **real** Atlas cluster and **real** De
 - **Not found**: a random/garbage import ID returns `404`; an unknown route returns `404`.
 - **Build/type safety**: `tsc --noEmit` and `next build` (including ESLint) both pass clean on the final code for both apps.
 - **UI**: dark mode and light mode, responsive layout down to mobile widths, virtualized tables confirmed to render correctly for the imported/skipped result sets, loading skeletons and empty/error states all exercised.
+- **Production smoke test**: after deploying, ran a real import against the live Render URL from the command line with the exact CORS origin the deployed Vercel frontend uses — CORS preflight returned `204`, the import completed with the same correct 4-imported/2-skipped result as local testing, and the record was verified in Atlas before being cleaned up.
+- **Deployment failure loop**: the first two Render deploy attempts failed — first on a TypeScript 5.9 deprecation (`moduleResolution` defaulting to the legacy `node10` resolver), then on `NODE_ENV=production` silently pruning `devDependencies` (including `typescript` and `@types/*`) before the build step ran. Both were root-caused from Render's build logs (not guessed) and fixed at the source (`nodenext` module resolution; `npm install --include=dev`) rather than papered over.
 
 ## Future improvements
 
